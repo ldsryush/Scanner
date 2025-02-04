@@ -1,0 +1,193 @@
+#include <iostream>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <vector>
+#include <cctype>
+
+using namespace std;
+
+enum TokenType {
+    COMMA,
+    STRING,
+    COMMENT,
+    QUERIES,
+    RULES,
+    SCHEMES,
+    FACTS,
+    COLON,
+    COLON_DASH,
+    ID,
+    LEFT_PAREN,
+    RIGHT_PAREN,
+    Q_MARK,
+    PERIOD,
+    ADD,
+    MULTIPLY,
+    END,
+    UNDEFINED
+};
+
+class Token {
+private:
+    TokenType type;
+    string value;
+    int lineNumber;
+
+public:
+    Token(TokenType type, string value, int lineNumber)
+        : type(type), value(value), lineNumber(lineNumber) {}
+
+    string toString() const {
+        return "(" + tokenTypeToString(type) + ",\"" + value + "\"," + to_string(lineNumber) + ")";
+    }
+
+private:
+    string tokenTypeToString(TokenType type) const {
+        switch (type) {
+            case COMMA: return "COMMA";
+            case STRING: return "STRING";
+            case COMMENT: return "COMMENT";
+            case QUERIES: return "QUERIES";
+            case RULES: return "RULES";
+            case SCHEMES: return "SCHEMES";
+            case FACTS: return "FACTS";
+            case COLON: return "COLON";
+            case COLON_DASH: return "COLON_DASH";
+            case ID: return "ID";
+            case LEFT_PAREN: return "LEFT_PAREN";
+            case RIGHT_PAREN: return "RIGHT_PAREN";
+            case Q_MARK: return "Q_MARK";
+            case PERIOD: return "PERIOD";
+            case ADD: return "ADD";
+            case MULTIPLY: return "MULTIPLY";
+            case END: return "END";
+            case UNDEFINED: return "UNDEFINED";
+            default: return "UNKNOWN";
+        }
+    }
+};
+
+class Scanner {
+private:
+    string input;
+    vector<Token> tokens;
+    int lineNumber;
+
+public:
+    Scanner(const string& input)
+        : input(input), lineNumber(1) {}
+
+    void scan() {
+        size_t i = 0;
+
+        if (input.empty()) {
+            tokens.push_back(Token(END, "", 1));
+            return;
+        }
+
+        while (i < input.size()) {
+            char c = input[i];
+
+            if (isspace(c)) {
+                if (c == '\n') lineNumber++;
+                i++;
+            } else if (c == ',') {
+                tokens.push_back(Token(COMMA, ",", lineNumber));
+                i++;
+            } else if (c == '\'') {
+                size_t start = i;
+                int startLine = lineNumber;
+                i++;
+                while (i < input.size() && input[i] != '\'') {
+                    if (input[i] == '\n') lineNumber++;
+                    i++;
+                }
+                if (i < input.size() && input[i] == '\'') {
+                    i++;
+                    tokens.push_back(Token(STRING, input.substr(start, i - start), startLine));
+                } else {
+                    tokens.push_back(Token(UNDEFINED, input.substr(start, i - start), startLine));
+                }
+            } else if (c == '#') {
+                size_t start = i;
+                int startLine = lineNumber;
+                while (i < input.size() && input[i] != '\n') {
+                    i++;
+                }
+                tokens.push_back(Token(COMMENT, input.substr(start, i - start), startLine));
+            } else if (isalpha(c)) {
+                size_t start = i;
+                int startLine = lineNumber;
+                while (i < input.size() && (isalnum(input[i]) || input[i] == '_')) {
+                    i++;
+                }
+                string value = input.substr(start, i - start);
+                TokenType type = (value == "Queries") ? QUERIES :
+                                 (value == "Rules") ? RULES :
+                                 (value == "Schemes") ? SCHEMES :
+                                 (value == "Facts") ? FACTS :
+                                 ID;
+                tokens.push_back(Token(type, value, startLine));
+            } else if (c == ':') {
+                if (i + 1 < input.size() && input[i + 1] == '-') {
+                    tokens.push_back(Token(COLON_DASH, ":-", lineNumber));
+                    i += 2;
+                } else {
+                    tokens.push_back(Token(COLON, ":", lineNumber));
+                    i++;
+                }
+            } else if (c == '(') {
+                tokens.push_back(Token(LEFT_PAREN, "(", lineNumber));
+                i++;
+            } else if (c == ')') {
+                tokens.push_back(Token(RIGHT_PAREN, ")", lineNumber));
+                i++;
+            } else if (c == '?') {
+                tokens.push_back(Token(Q_MARK, "?", lineNumber));
+                i++;
+            } else if (c == '.') {
+                tokens.push_back(Token(PERIOD, ".", lineNumber));
+                i++;
+            } else if (c == '+') {
+                tokens.push_back(Token(ADD, "+", lineNumber));
+                i++;
+            } else if (c == '*') {
+                tokens.push_back(Token(MULTIPLY, "*", lineNumber));
+                i++;
+            } else {
+                tokens.push_back(Token(UNDEFINED, string(1, c), lineNumber));
+                i++;
+            }
+        }
+
+        tokens.push_back(Token(END, "", lineNumber));
+    }
+
+    const vector<Token>& getTokens() const {
+        return tokens;
+    }
+};
+
+int main(int argc, char* argv[]) {
+    string filename = argv[1];
+    ifstream file(filename);
+    if (!file.is_open()) {
+        return 1;
+    }
+
+    stringstream buffer;
+    buffer << file.rdbuf();
+    string fileContents = buffer.str();
+
+    Scanner scanner(fileContents);
+    scanner.scan();
+
+    const vector<Token>& tokens = scanner.getTokens();
+    for (const Token& token : tokens) {
+        cout << token.toString() << endl;
+    }
+    cout << "Total Tokens = " << tokens.size() << endl;
+
+    return 0;
+}
